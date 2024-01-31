@@ -21,6 +21,7 @@ class MatomoApiTrackingMiddleware:
         try:
             account = settings.MATOMO_API_TRACKING['site_id']
             ignore_paths = settings.MATOMO_API_TRACKING.get('ignore_paths', [])
+            ignore_html = settings.MATOMO_API_TRACKING.get('ignore_html', False)
         except (AttributeError, KeyError):
             raise Exception("Matomo configuration incomplete")
 
@@ -28,9 +29,21 @@ class MatomoApiTrackingMiddleware:
         if any(p for p in ignore_paths if request.path.startswith(p)):
             return response
 
+        logger.info("testing: processing response")
+        logger.info(f'testing: ignore_html: {ignore_html}')
+        logger.info(f'testing: response.content[:100]: {response.content[:100]}')
+        logger.info(f'testing: response[Content-Type]: {response.headers["Content-Type"]}')
+
         try:
             if (response.content[:100].lower().find(b"<html>") >= 0 or
-                    response.accepted_media_type == "text/html"):
+                response.content[:100].lower().find(b"<!doctype html>") >= 0 or
+                (response.headers.get('Content-Type') and
+                    response.headers['Content-Type'].startswith("text/html"))):
+                logger.info("testing: response is html")
+                if ignore_html:
+                    logger.info("testing: ignore_html is True")
+                    return response
+
                 title = BeautifulSoup(
                     response.content, "html.parser").html.head.title.text
             else:
