@@ -2,6 +2,7 @@ from django.conf import settings
 from .tasks import send_matomo_tracking
 from bs4 import BeautifulSoup
 import logging
+import ipdb
 
 from .utils import build_api_params, set_cookie
 
@@ -32,16 +33,15 @@ class MatomoApiTrackingMiddleware:
         logger.info("testing: processing response")
         logger.info(f'testing: ignore_html: {ignore_html}')
         logger.info(f'testing: response.content[:100]: {response.content[:100]}')
-        logger.info(f'testing: response[Content-Type]: {response.headers["Content-Type"]}')
+        logger.info(f'testing: response[Content-Type]: {response["Content-Type"]}')
+
+        import ipdb; ipdb.set_trace()
 
         try:
             if (response.content[:100].lower().find(b"<html>") >= 0 or
-                response.content[:100].lower().find(b"<!doctype html>") >= 0 or
-                (response.headers.get('Content-Type') and
-                    response.headers['Content-Type'].startswith("text/html"))):
-                logger.info("testing: response is html")
+                    response.content[:100].lower().find(b"<!doctype html>") >= 0 or
+                    (response.headers and response.headers.get('Content-Type', '').startswith("text/html"))):
                 if ignore_html:
-                    logger.info("testing: ignore_html is True")
                     return response
 
                 title = BeautifulSoup(

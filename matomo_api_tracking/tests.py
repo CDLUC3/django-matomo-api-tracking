@@ -22,7 +22,9 @@ class MatomoTestCase(TestCase):
         """
 
         def mock_view(request):
-            return HttpResponse("")
+            res = HttpResponse(content_type='text/html')
+            res['Content-Type'] = 'text/html; charset=utf-8'
+            return res
 
         rf = RequestFactory()
         request = rf.get(url, **headers)
