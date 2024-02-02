@@ -55,3 +55,12 @@ is probably already a Javascript tracking code and manual tracking doubles the s
 This was implemented for a legacy site that shared the same URLs between a web application and
 an API with the only difference being the accept an/or content-type headers that differentiate
 UI and API requests.
+
+## Testing
+
+This middleware uses the tox testing framework.
+
+```
+pip install tox
+python -m tox
+```
