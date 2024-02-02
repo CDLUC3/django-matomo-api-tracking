@@ -15,20 +15,20 @@ from .tasks import logger as task_logger
 
 class MatomoTestCase(TestCase):
 
-    def make_fake_request(self, url, headers={}):
+    def make_fake_request(self, url, headers={}, return_content_type="text/html; charset=utf-8"):
         """
         We don't have any normal views, so we're creating fake
         views using django's RequestFactory
         """
 
-        def mock_view(request):
+        def mock_view(request, return_content_type=return_content_type):
             res = HttpResponse(content_type='text/html')
             res['Content-Type'] = 'text/html; charset=utf-8'
             return res
 
         rf = RequestFactory()
         request = rf.get(url, **headers)
-        session_middleware = SessionMiddleware(mock_view)
+        session_middleware = SessionMiddleware(mock_view(request, return_content_type=return_content_type))
         session_middleware.process_request(request)
         request.session.save()
         return request
@@ -52,6 +52,49 @@ class MatomoTestCase(TestCase):
             '/sections/deep-soul/ما-مدى-جاهزيتك-للإنترنت/', headers)
 
         html = ("<html><head><title>"
+                "ما-مدى-جاهزيتك-للإنترنت</title></head></html>")
+        middleware = MatomoApiTrackingMiddleware(lambda r: HttpResponse(html))
+        response = middleware(request)
+        uid = response.cookies.get(COOKIE_NAME).value
+
+        self.assertEqual(len(responses.calls), 1)
+
+        track_url = responses.calls[0].request.url
+
+        self.assertEqual(
+            parse_qs(track_url).get('url'), [
+                'http://testserver/sections/deep-soul/%D9%85%D8%A7-%D9%85%D8%AF%D9%89-'
+                '%D8%AC%D8%A7%D9%87%D8%B2%D9%8A%D8%AA%D9%83-%D9%84%D9'
+                '%84%D8%A5%D9%86%D8%AA%D8%B1%D9%86%D8%AA/'])
+        self.assertEqual(parse_qs(track_url).get('action_name'), [
+            '%D9%85%D8%A7-%D9%85%D8%AF%D9%89-%D8%AC%D8%A7%D9%87%D8%B2%D9%8A%D8'
+            '%AA%D9%83-%D9%84%D9%84%D8%A5%D9%86%D8%AA%D8%B1%D9%86%D8%AA'])
+        self.assertEqual(parse_qs(track_url).get('idsite'),
+                         [str(settings.MATOMO_API_TRACKING['site_id'])])
+        self.assertEqual(parse_qs(track_url).get('_id'), [uid])
+        self.assertEqual(len(uid), 16)
+        self.assertIsNone(parse_qs(track_url).get('cip'))
+
+    @override_settings(
+        MIDDLEWARE=[
+            'django.contrib.sessions.middleware.SessionMiddleware',
+            'matomo_api_tracking.middleware.MatomoApiTrackingMiddleware'
+        ],
+        TASK_ALWAYS_EAGER=True,
+        BROKER_URL='memory://')
+    @responses.activate
+    def test_matomo_middleware_html4(self):
+        responses.add(
+            responses.GET, settings.MATOMO_API_TRACKING['url'],
+            body='',
+            status=200)
+
+        headers = {'HTTP_X_IORG_FBS_UIP': '100.100.200.10'}
+        request = self.make_fake_request(
+            '/sections/deep-soul/ما-مدى-جاهزيتك-للإنترنت/', headers)
+
+        html = ('<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">'
+                "<html><head><title>"
                 "ما-مدى-جاهزيتك-للإنترنت</title></head></html>")
         middleware = MatomoApiTrackingMiddleware(lambda r: HttpResponse(html))
         response = middleware(request)
@@ -237,6 +280,17 @@ class MatomoTestCase(TestCase):
                                     settings.MATOMO_API_TRACKING))
     def test_matomo_middleware_ignore_path(self):
         request = self.make_fake_request('/ignore-this/somewhere/')
+        middleware = MatomoApiTrackingMiddleware(lambda req: HttpResponse())
+        middleware(request)
+        self.assertEqual(len(responses.calls), 0)
+
+    @override_settings(MIDDLEWARE=[
+        'django.contrib.sessions.middleware.SessionMiddleware',
+        'matomo_api_tracking.middleware.MatomoApiTrackingMiddleware'
+    ], MATOMO_API_TRACKING=ChainMap({'ignore_html': True},
+                                    settings.MATOMO_API_TRACKING))
+    def test_matomo_middleware_ignore_html(self):
+        request = self.make_fake_request('/ignore-this/html/')
         middleware = MatomoApiTrackingMiddleware(lambda req: HttpResponse())
         middleware(request)
         self.assertEqual(len(responses.calls), 0)

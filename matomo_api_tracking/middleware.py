@@ -2,7 +2,6 @@ from django.conf import settings
 from .tasks import send_matomo_tracking
 from bs4 import BeautifulSoup
 import logging
-import ipdb
 
 from .utils import build_api_params, set_cookie
 
@@ -30,17 +29,10 @@ class MatomoApiTrackingMiddleware:
         if any(p for p in ignore_paths if request.path.startswith(p)):
             return response
 
-        logger.info("testing: processing response")
-        logger.info(f'testing: ignore_html: {ignore_html}')
-        logger.info(f'testing: response.content[:100]: {response.content[:100]}')
-        logger.info(f'testing: response[Content-Type]: {response["Content-Type"]}')
-
-        import ipdb; ipdb.set_trace()
-
         try:
             if (response.content[:100].lower().find(b"<html>") >= 0 or
-                    response.content[:100].lower().find(b"<!doctype html>") >= 0 or
-                    (response.headers and response.headers.get('Content-Type', '').startswith("text/html"))):
+                    response.content[:100].lower().find(b"<!doctype html") >= 0 or
+                    response.get('Content-Type', '').startswith("text/html")):
                 if ignore_html:
                     return response
 
@@ -58,7 +50,7 @@ class MatomoApiTrackingMiddleware:
         try:
             send_matomo_tracking.delay(params)
         except Exception as e:
-            logger.warning("cannot send google analytic tracking post: {}"
+            logger.warning("cannot send Matomo analytic tracking post: {}"
                            .format(e))
 
         return response
