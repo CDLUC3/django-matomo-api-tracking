@@ -21,6 +21,7 @@ class MatomoApiTrackingMiddleware:
         try:
             account = settings.MATOMO_API_TRACKING['site_id']
             ignore_paths = settings.MATOMO_API_TRACKING.get('ignore_paths', [])
+            ignore_html = settings.MATOMO_API_TRACKING.get('ignore_html', False)
         except (AttributeError, KeyError):
             raise Exception("Matomo configuration incomplete")
 
@@ -30,7 +31,11 @@ class MatomoApiTrackingMiddleware:
 
         try:
             if (response.content[:100].lower().find(b"<html>") >= 0 or
-                    response.accepted_media_type == "text/html"):
+                    response.content[:100].lower().find(b"<!doctype html") >= 0 or
+                    response.get('Content-Type', '').startswith("text/html")):
+                if ignore_html:
+                    return response
+
                 title = BeautifulSoup(
                     response.content, "html.parser").html.head.title.text
             else:
@@ -45,7 +50,7 @@ class MatomoApiTrackingMiddleware:
         try:
             send_matomo_tracking.delay(params)
         except Exception as e:
-            logger.warning("cannot send google analytic tracking post: {}"
+            logger.warning("cannot send Matomo analytic tracking post: {}"
                            .format(e))
 
         return response
